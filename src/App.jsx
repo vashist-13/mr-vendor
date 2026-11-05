@@ -30,7 +30,8 @@ import {
   ArrowRight,
   Bot,
   MessageCircle,
-  Send
+  Send,
+  FileText
 } from 'lucide-react';
 
 // --- INITIAL CATEGORIES MATCHING REFERENCE UI TOKENS ---
@@ -650,7 +651,7 @@ export default function App() {
   const [assistantMessages, setAssistantMessages] = useState([
     {
       role: 'assistant',
-      text: 'Hi! I’m your MR.VENDOR demo assistant. Choose a question below to see how I can help with store operations.'
+      text: 'Hi! I can compile your Payment History records from all six bill categories into a bank loan support report.'
     }
   ]);
   const [warehouse, setWarehouse] = useState('Warehouse Central A-1');
@@ -739,11 +740,66 @@ export default function App() {
     setTimeout(() => setToast((prev) => (prev === message ? null : prev)), 3200);
   };
 
+  const generateLoanDocument = () => {
+    const reportWindow = window.open('', '_blank');
+    if (!reportWindow) {
+      showToast('Allow pop-ups for this site to open the loan document.');
+      return false;
+    }
+
+    const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;'
+    })[char]);
+    const money = (value) => `₹${Number(value || 0).toLocaleString('en-IN')}`;
+    const dateText = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' });
+    const paidBills = billsList.filter((bill) => bill.status === 'Paid');
+    const pendingBills = billsList.filter((bill) => bill.status !== 'Paid');
+    const categoryRows = BILL_CATEGORIES.map((category) => {
+      const categoryBills = billsList.filter((bill) => bill.categoryId === category.id);
+      const categoryTotal = categoryBills.reduce((sum, bill) => sum + Number(bill.amount || 0), 0);
+      const categoryPaid = categoryBills.filter((bill) => bill.status === 'Paid').reduce((sum, bill) => sum + Number(bill.amount || 0), 0);
+      return `<tr><td>${escapeHtml(category.name)}</td><td>${categoryBills.length}</td><td>${money(categoryTotal)}</td><td>${money(categoryPaid)}</td></tr>`;
+    }).join('');
+    const billRows = billsList.map((bill) => {
+      const category = BILL_CATEGORIES.find((item) => item.id === bill.categoryId);
+      return `<tr><td>${escapeHtml(bill.date || bill.month)}</td><td>${escapeHtml(category?.name || bill.categoryId)}</td><td><strong>${escapeHtml(bill.title)}</strong><br>${escapeHtml(bill.provider)}<br><span class="muted">${escapeHtml(bill.subtext)} · Ref: ${escapeHtml(bill.refNo)}</span></td><td>${escapeHtml(bill.method)}</td><td>${escapeHtml(bill.status)}</td><td class="amount">${money(bill.amount)}</td></tr>`;
+    }).join('');
+    const paymentRows = payments.map((payment) => `<tr><td>${escapeHtml(payment.timestamp)}</td><td>${escapeHtml(payment.id)}</td><td>${escapeHtml(payment.gateway)} · ${escapeHtml(payment.method)}</td><td>${escapeHtml(payment.entity)}</td><td>${escapeHtml(payment.note)}</td><td>${escapeHtml(payment.status)}</td><td class="amount">${money(payment.amount)}</td></tr>`).join('');
+    const recordPeriod = [...new Set(billsList.map((bill) => bill.month).filter(Boolean))].join(', ') || 'All available records';
+
+    reportWindow.document.write(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Business Financial Summary - ${escapeHtml(storeConfig.storeName)}</title><style>
+      *{box-sizing:border-box}body{margin:0;background:#eef0ed;color:#1f2b24;font:13px/1.5 Arial,sans-serif}.toolbar{position:sticky;top:0;padding:12px;text-align:center;background:#263f32}.toolbar button{border:0;border-radius:8px;padding:10px 18px;background:#fff;color:#263f32;font-weight:700;cursor:pointer}.paper{max-width:920px;margin:24px auto;padding:44px 50px;background:#fff;box-shadow:0 8px 32px #263f3222}.brand{color:#567560;font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase}.doc-title{margin:8px 0 4px;font-size:25px}.subtitle,.muted{color:#68736d}.meta{display:flex;justify-content:space-between;gap:20px;margin:20px 0;padding:12px 0;border-block:1px solid #dce2dd}.summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:18px 0}.metric{border:1px solid #dce2dd;border-radius:8px;padding:12px}.metric small{display:block;color:#68736d}.metric strong{font-size:18px}.section{margin-top:25px}.section h2{font-size:15px;border-bottom:1px solid #b8c7bb;padding-bottom:7px}table{width:100%;border-collapse:collapse;margin-top:10px;font-size:11px}th,td{padding:8px 7px;border:1px solid #dce2dd;text-align:left;vertical-align:top}th{background:#edf2ee;color:#263f32}.amount{text-align:right;white-space:nowrap}.note{margin-top:18px;padding:12px;background:#f3f5f3;border-left:3px solid #688b75;font-size:11px}.signature{display:grid;grid-template-columns:1fr 1fr;gap:60px;margin:45px 0 20px}.sigline{border-top:1px solid #68736d;padding-top:6px;color:#68736d;font-size:11px}.footer{margin-top:24px;border-top:1px solid #dce2dd;padding-top:10px;color:#68736d;font-size:10px}@media(max-width:650px){.paper{margin:0;padding:24px 16px}.summary{grid-template-columns:1fr}.meta{display:block}table{font-size:9px}th,td{padding:5px 4px}}@media print{body{background:#fff;font-size:10px}.toolbar{display:none}.paper{max-width:none;margin:0;padding:12mm;box-shadow:none}.section{break-inside:avoid}thead{display:table-header-group}tr{break-inside:avoid}.doc-title{font-size:21px}}
+    </style></head><body><div class="toolbar"><button onclick="window.print()">Print / Save as PDF</button></div><main class="paper"><div class="brand">MR.VENDOR · Management-prepared report</div><h1 class="doc-title">Business Financial Summary &amp; Bill Statement</h1><div class="subtitle">Supporting records for bank credit / loan review</div><div class="meta"><div><strong>Business:</strong> ${escapeHtml(storeConfig.storeName)}</div><div><strong>Prepared on:</strong> ${escapeHtml(dateText)}</div><div><strong>Record period:</strong> ${escapeHtml(recordPeriod)}</div></div><div class="summary"><div class="metric"><small>Bill / statement records</small><strong>${billsList.length}</strong></div><div class="metric"><small>Paid bill value</small><strong>${money(paidBills.reduce((sum, bill) => sum + Number(bill.amount || 0), 0))}</strong></div><div class="metric"><small>Pending bill value</small><strong>${money(pendingBills.reduce((sum, bill) => sum + Number(bill.amount || 0), 0))}</strong></div></div><section class="section"><h2>Summary by bill category</h2><table><thead><tr><th>Category</th><th>Records</th><th>Recorded value</th><th>Paid value</th></tr></thead><tbody>${categoryRows}</tbody></table><p class="muted">Category values summarize records entered in each segment. They may represent different kinds of activity, including profit statements and payment receipts, and should not be added together as a single expense figure.</p></section><section class="section"><h2>Bill and statement register (${billsList.length} records)</h2><table><thead><tr><th>Date</th><th>Category</th><th>Bill / statement details</th><th>Payment method</th><th>Status</th><th>Amount</th></tr></thead><tbody>${billRows || '<tr><td colspan="6">No bill records available.</td></tr>'}</tbody></table></section><section class="section"><h2>Payment transaction log (${payments.length} records)</h2><table><thead><tr><th>Date / time</th><th>Transaction ID</th><th>Gateway / method</th><th>Entity</th><th>Description</th><th>Status</th><th>Amount</th></tr></thead><tbody>${paymentRows || '<tr><td colspan="7">No payment transactions available.</td></tr>'}</tbody></table></section><div class="note"><strong>Review before submission:</strong> This report compiles business records currently entered in MR.VENDOR. Verify each amount and status, and attach original invoices, bank statements, tax returns, and any other evidence requested by the lender. This is management-prepared and is not bank-issued, audited, or independently certified.</div><div class="signature"><div class="sigline">Authorized business representative · Name / signature</div><div class="sigline">Date and business seal (if applicable)</div></div><div class="footer">Generated from MR.VENDOR records for review. This document does not certify the authenticity of source invoices or financial data.</div></main></body></html>`);
+    reportWindow.document.close();
+    return true;
+  };
+
   const handleAssistantPrompt = (prompt) => {
     const normalizedPrompt = prompt.toLowerCase();
-    let reply = 'I can help with stock, expiry, profit, and supplier questions. Try one of the suggested prompts below.';
+    let reply = 'I can compile all six bill categories and the payment log into a print-ready bank loan support report.';
 
-    if (normalizedPrompt.includes('low stock') || normalizedPrompt.includes('restock')) {
+    if (normalizedPrompt.includes('loan') || normalizedPrompt.includes('document') || normalizedPrompt.includes('report') || normalizedPrompt.includes('statement')) {
+      reply = generateLoanDocument()
+        ? 'I compiled all bill categories and payment transactions into a report in a new tab. Choose “Print / Save as PDF” there to create a PDF for review.'
+        : 'I could not open the report. Please allow pop-ups for this site, then try again.';
+    } else if (normalizedPrompt.includes('category') || normalizedPrompt.includes('total')) {
+      const totals = BILL_CATEGORIES.map((category) => {
+        const categoryBills = billsList.filter((bill) => bill.categoryId === category.id);
+        const total = categoryBills.reduce((sum, bill) => sum + Number(bill.amount || 0), 0);
+        return `${category.name}: ${categoryBills.length} records, ₹${total.toLocaleString('en-IN')}`;
+      });
+      reply = `Current recorded totals: ${totals.join('; ')}. Choose “Prepare bank loan report” to include every bill and transaction in a document.`;
+    } else if (normalizedPrompt.includes('pending') || normalizedPrompt.includes('unpaid')) {
+      const pending = billsList.filter((bill) => bill.status !== 'Paid');
+      const pendingTotal = pending.reduce((sum, bill) => sum + Number(bill.amount || 0), 0);
+      reply = pending.length
+        ? `${pending.length} bill(s) are pending, totaling ₹${pendingTotal.toLocaleString('en-IN')}: ${pending.map((bill) => bill.title).join('; ')}.`
+        : 'There are no bills marked pending in the current sample records.';
+    } else if (normalizedPrompt.includes('low stock') || normalizedPrompt.includes('restock')) {
       const lowStockItems = inventoryItems.filter((item) => item.statusTag === 'Low Stock');
       reply = lowStockItems.length
         ? `Restock suggestion: ${lowStockItems.map((item) => `${item.name} (${item.totalQty - item.soldQty} units remaining)`).join(', ')}. Check the Suppliers tab to plan a reorder.`
@@ -754,7 +810,10 @@ export default function App() {
         ? `Priority items: ${expiringItems.map((item) => `${item.name} — ${item.expiryNote}`).join('; ')}. Consider a quick markdown or bundle offer to reduce waste.`
         : 'There are no sample items marked as expiring. Check the inventory expiry notes regularly.';
     } else if (normalizedPrompt.includes('profit') || normalizedPrompt.includes('margin')) {
-      reply = 'The sample dashboard shows November net profit of ₹1,94,500, up 18.4% month over month. Open Analysis for the example margin and pricing insights.';
+      const profitBill = billsList.find((bill) => bill.categoryId === 'profit');
+      reply = profitBill
+        ? `The Profit History record shows ₹${Number(profitBill.amount).toLocaleString('en-IN')} (${profitBill.month || 'period not specified'}). This figure is listed separately from operating bills in the report.`
+        : 'There is no Profit History record in the current bill data.';
     } else if (normalizedPrompt.includes('supplier')) {
       reply = `You have ${suppliers.length} sample suppliers. Open the Suppliers tab to review contacts, sourced items, and recent purchase details.`;
     }
@@ -1358,19 +1417,28 @@ export default function App() {
                 })}
               </div>
 
-              <button
-                onClick={() => {
-                  setNewReceiptForm((prev) => ({
-                    ...prev,
-                    categoryId: activeBillCategory === 'all' ? 'household' : activeBillCategory
-                  }));
-                  setIsSimPaymentOpen(true);
-                }}
-                className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-[#F5F5F2]/85 border border-white text-xs font-semibold text-[#18201C] hover:bg-white transition-all cursor-pointer"
-              >
-                <Plus className="w-3.5 h-3.5 text-[#235C36]" />
-                <span>+ Add / Simulate Bill</span>
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={generateLoanDocument}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-[#688B75] border border-white text-xs font-semibold text-white hover:bg-[#587964] transition-all cursor-pointer"
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  <span>Prepare Bank Loan Report</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setNewReceiptForm((prev) => ({
+                      ...prev,
+                      categoryId: activeBillCategory === 'all' ? 'household' : activeBillCategory
+                    }));
+                    setIsSimPaymentOpen(true);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-[#F5F5F2]/85 border border-white text-xs font-semibold text-[#18201C] hover:bg-white transition-all cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5 text-[#235C36]" />
+                  <span>+ Add / Simulate Bill</span>
+                </button>
+              </div>
             </div>
           )}
 
@@ -2055,14 +2123,14 @@ export default function App() {
       )}
 
       {/* PRESET AI ASSISTANT DEMO */}
-      {assistantOpen && (
-        <section className="fixed bottom-40 right-4 sm:bottom-24 sm:right-6 z-50 w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-[24px] border border-white/90 bg-[#F5F5F2]/95 shadow-[0_20px_55px_rgba(24,32,28,0.22)] backdrop-blur-xl" aria-label="MR.VENDOR demo assistant">
+      {activeMainTab === 'payments' && assistantOpen && (
+        <section className="fixed bottom-40 right-4 sm:bottom-24 sm:right-6 z-50 w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-[24px] border border-white/90 bg-[#F5F5F2]/95 shadow-[0_20px_55px_rgba(24,32,28,0.22)] backdrop-blur-xl" aria-label="MR.VENDOR loan document assistant">
           <div className="flex items-center justify-between bg-[#688B75] px-4 py-3 text-white">
             <div className="flex items-center gap-2.5">
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/15"><Bot className="h-5 w-5" /></div>
               <div>
-                <h2 className="text-sm font-bold">Vendor Assistant</h2>
-                <p className="text-[10px] text-white/80">Demo • preset responses</p>
+                <h2 className="text-sm font-bold">Loan Document Assistant</h2>
+                <p className="text-[10px] text-white/80">Demo • uses Payment History records</p>
               </div>
             </div>
             <button type="button" onClick={() => setAssistantOpen(false)} className="rounded-lg px-2 py-1 text-lg leading-none text-white/90 hover:bg-white/15" aria-label="Close assistant">×</button>
@@ -2081,23 +2149,25 @@ export default function App() {
           <div className="border-t border-[#18201C]/10 px-3 pb-3 pt-2">
             <p className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-wide text-[#68736D]">Try a question</p>
             <div className="mb-3 flex flex-wrap gap-1.5">
-              {['What needs restocking?', 'Which items expire soon?', 'How is profit?', 'Show suppliers'].map((prompt) => (
+              {['Prepare bank loan report', 'Show totals by category', 'Are any bills pending?', 'Show profit record'].map((prompt) => (
                 <button key={prompt} type="button" onClick={() => handleAssistantPrompt(prompt)} className="rounded-full border border-[#688B75]/25 bg-white/80 px-2.5 py-1.5 text-[10px] font-medium text-[#345241] hover:bg-[#E5ECE7]">
                   {prompt}
                 </button>
               ))}
             </div>
             <form onSubmit={(event) => { event.preventDefault(); if (assistantInput.trim()) handleAssistantPrompt(assistantInput.trim()); }} className="flex items-center gap-2">
-              <input value={assistantInput} onChange={(event) => setAssistantInput(event.target.value)} placeholder="Ask about your store…" className="min-w-0 flex-1 rounded-xl border border-[#18201C]/10 bg-white px-3 py-2.5 text-xs text-[#18201C] outline-none focus:border-[#688B75]" aria-label="Ask the demo assistant" />
+              <input value={assistantInput} onChange={(event) => setAssistantInput(event.target.value)} placeholder="Ask about bills or totals…" className="min-w-0 flex-1 rounded-xl border border-[#18201C]/10 bg-white px-3 py-2.5 text-xs text-[#18201C] outline-none focus:border-[#688B75]" aria-label="Ask the loan document assistant" />
               <button type="submit" disabled={!assistantInput.trim()} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#688B75] text-white disabled:cursor-not-allowed disabled:opacity-40" aria-label="Send question"><Send className="h-4 w-4" /></button>
             </form>
           </div>
         </section>
       )}
-      <button type="button" onClick={() => setAssistantOpen((open) => !open)} className="fixed bottom-24 right-4 sm:bottom-6 sm:right-6 z-50 flex items-center gap-2 rounded-full border border-white/80 bg-[#688B75] px-4 py-3 text-white shadow-[0_10px_28px_rgba(35,50,40,0.25)] transition hover:bg-[#587964]" aria-expanded={assistantOpen} aria-label={assistantOpen ? 'Close vendor assistant' : 'Open vendor assistant'}>
-        <MessageCircle className="h-5 w-5" />
-        <span className="text-xs font-semibold">Ask Assistant</span>
-      </button>
+      {activeMainTab === 'payments' && (
+        <button type="button" onClick={() => setAssistantOpen((open) => !open)} className="fixed bottom-24 right-4 sm:bottom-6 sm:right-6 z-50 flex items-center gap-2 rounded-full border border-white/80 bg-[#688B75] px-4 py-3 text-white shadow-[0_10px_28px_rgba(35,50,40,0.25)] transition hover:bg-[#587964]" aria-expanded={assistantOpen} aria-label={assistantOpen ? 'Close loan document assistant' : 'Open loan document assistant'}>
+          <MessageCircle className="h-5 w-5" />
+          <span className="text-xs font-semibold">Loan Assistant</span>
+        </button>
+      )}
     </div>
   );
 }
