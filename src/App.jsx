@@ -27,7 +27,10 @@ import {
   Building2,
   ArrowLeft,
   TrendingUp,
-  ArrowRight
+  ArrowRight,
+  Bot,
+  MessageCircle,
+  Send
 } from 'lucide-react';
 
 // --- INITIAL CATEGORIES MATCHING REFERENCE UI TOKENS ---
@@ -642,6 +645,14 @@ export default function App() {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [toast, setToast] = useState(null);
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  const [assistantInput, setAssistantInput] = useState('');
+  const [assistantMessages, setAssistantMessages] = useState([
+    {
+      role: 'assistant',
+      text: 'Hi! I’m your MR.VENDOR demo assistant. Choose a question below to see how I can help with store operations.'
+    }
+  ]);
   const [warehouse, setWarehouse] = useState('Warehouse Central A-1');
   const [selectedItemDetail, setSelectedItemDetail] = useState(null);
 
@@ -726,6 +737,34 @@ export default function App() {
   const showToast = (message) => {
     setToast(message);
     setTimeout(() => setToast((prev) => (prev === message ? null : prev)), 3200);
+  };
+
+  const handleAssistantPrompt = (prompt) => {
+    const normalizedPrompt = prompt.toLowerCase();
+    let reply = 'I can help with stock, expiry, profit, and supplier questions. Try one of the suggested prompts below.';
+
+    if (normalizedPrompt.includes('low stock') || normalizedPrompt.includes('restock')) {
+      const lowStockItems = inventoryItems.filter((item) => item.statusTag === 'Low Stock');
+      reply = lowStockItems.length
+        ? `Restock suggestion: ${lowStockItems.map((item) => `${item.name} (${item.totalQty - item.soldQty} units remaining)`).join(', ')}. Check the Suppliers tab to plan a reorder.`
+        : 'Your sample inventory has no items marked Low Stock right now. Keep checking the Inventory tab as sales come in.';
+    } else if (normalizedPrompt.includes('expir') || normalizedPrompt.includes('waste')) {
+      const expiringItems = inventoryItems.filter((item) => item.isOutdated);
+      reply = expiringItems.length
+        ? `Priority items: ${expiringItems.map((item) => `${item.name} — ${item.expiryNote}`).join('; ')}. Consider a quick markdown or bundle offer to reduce waste.`
+        : 'There are no sample items marked as expiring. Check the inventory expiry notes regularly.';
+    } else if (normalizedPrompt.includes('profit') || normalizedPrompt.includes('margin')) {
+      reply = 'The sample dashboard shows November net profit of ₹1,94,500, up 18.4% month over month. Open Analysis for the example margin and pricing insights.';
+    } else if (normalizedPrompt.includes('supplier')) {
+      reply = `You have ${suppliers.length} sample suppliers. Open the Suppliers tab to review contacts, sourced items, and recent purchase details.`;
+    }
+
+    setAssistantMessages((messages) => [
+      ...messages,
+      { role: 'user', text: prompt },
+      { role: 'assistant', text: reply }
+    ]);
+    setAssistantInput('');
   };
 
   const filteredItems = useMemo(() => {
@@ -2014,6 +2053,51 @@ export default function App() {
           <span>{toast}</span>
         </div>
       )}
+
+      {/* PRESET AI ASSISTANT DEMO */}
+      {assistantOpen && (
+        <section className="fixed bottom-40 right-4 sm:bottom-24 sm:right-6 z-50 w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-[24px] border border-white/90 bg-[#F5F5F2]/95 shadow-[0_20px_55px_rgba(24,32,28,0.22)] backdrop-blur-xl" aria-label="MR.VENDOR demo assistant">
+          <div className="flex items-center justify-between bg-[#688B75] px-4 py-3 text-white">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/15"><Bot className="h-5 w-5" /></div>
+              <div>
+                <h2 className="text-sm font-bold">Vendor Assistant</h2>
+                <p className="text-[10px] text-white/80">Demo • preset responses</p>
+              </div>
+            </div>
+            <button type="button" onClick={() => setAssistantOpen(false)} className="rounded-lg px-2 py-1 text-lg leading-none text-white/90 hover:bg-white/15" aria-label="Close assistant">×</button>
+          </div>
+
+          <div className="max-h-72 space-y-3 overflow-y-auto p-4" aria-live="polite">
+            {assistantMessages.map((message, index) => (
+              <div key={`${message.role}-${index}`} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <p className={`max-w-[88%] rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed ${message.role === 'user' ? 'rounded-br-md bg-[#688B75] text-white' : 'rounded-bl-md bg-[#EAE6DF] text-[#26342C]'}`}>
+                  {message.text}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          <div className="border-t border-[#18201C]/10 px-3 pb-3 pt-2">
+            <p className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-wide text-[#68736D]">Try a question</p>
+            <div className="mb-3 flex flex-wrap gap-1.5">
+              {['What needs restocking?', 'Which items expire soon?', 'How is profit?', 'Show suppliers'].map((prompt) => (
+                <button key={prompt} type="button" onClick={() => handleAssistantPrompt(prompt)} className="rounded-full border border-[#688B75]/25 bg-white/80 px-2.5 py-1.5 text-[10px] font-medium text-[#345241] hover:bg-[#E5ECE7]">
+                  {prompt}
+                </button>
+              ))}
+            </div>
+            <form onSubmit={(event) => { event.preventDefault(); if (assistantInput.trim()) handleAssistantPrompt(assistantInput.trim()); }} className="flex items-center gap-2">
+              <input value={assistantInput} onChange={(event) => setAssistantInput(event.target.value)} placeholder="Ask about your store…" className="min-w-0 flex-1 rounded-xl border border-[#18201C]/10 bg-white px-3 py-2.5 text-xs text-[#18201C] outline-none focus:border-[#688B75]" aria-label="Ask the demo assistant" />
+              <button type="submit" disabled={!assistantInput.trim()} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#688B75] text-white disabled:cursor-not-allowed disabled:opacity-40" aria-label="Send question"><Send className="h-4 w-4" /></button>
+            </form>
+          </div>
+        </section>
+      )}
+      <button type="button" onClick={() => setAssistantOpen((open) => !open)} className="fixed bottom-24 right-4 sm:bottom-6 sm:right-6 z-50 flex items-center gap-2 rounded-full border border-white/80 bg-[#688B75] px-4 py-3 text-white shadow-[0_10px_28px_rgba(35,50,40,0.25)] transition hover:bg-[#587964]" aria-expanded={assistantOpen} aria-label={assistantOpen ? 'Close vendor assistant' : 'Open vendor assistant'}>
+        <MessageCircle className="h-5 w-5" />
+        <span className="text-xs font-semibold">Ask Assistant</span>
+      </button>
     </div>
   );
 }
